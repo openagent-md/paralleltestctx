@@ -77,7 +77,7 @@ func TestContextOverwrittenWarn(t *testing.T) {
 	t.Run("sub", func(t *testing.T) {
 		t.Parallel()
 		ctx = context.Background() // want "timeout context ctx overwritten after a t.Parallel call; did you mean to shadow the variable\\?"
-		_ = ctx                    // want "timeout context ctx used after a t.Parallel call"
+		_ = ctx
 	})
 }
 
@@ -105,6 +105,17 @@ func TestDifferentScopes(t *testing.T) {
 		t.Parallel() // parallel call in subtest
 	})
 	_ = ctx // used in main test - should not warn (different scope)
+}
+
+func TestOverwriteEarly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+	_ = ctx
+	ctx = context.Background()
+	t.Run("sub", func(t *testing.T) {
+		t.Parallel()
+		_ = ctx
+	})
 }
 
 func doThing(ctx context.Context) {

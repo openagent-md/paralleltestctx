@@ -181,13 +181,15 @@ func testParamName(fd *ast.FuncDecl) string {
 
 // timeoutContext represents a context variable created with a timeout/deadline
 type timeoutContext struct {
-	obj types.Object
-	pos token.Pos // position where it was created
+	obj        types.Object
+	pos        token.Pos // position where it was created
+	invalidPos token.Pos // position where it was overwritten with non-timeout context (0 if still valid)
 }
 
 // collectTimeoutContexts finds all context variables created with a timeout/deadline functions
 func (a *ctxAnalyzer) collectTimeoutContexts(pass *analysis.Pass, fd *ast.FuncDecl) []timeoutContext {
 	var contexts []timeoutContext
+	contextMap := make(map[types.Object]*timeoutContext)
 
 	ast.Inspect(fd.Body, func(n ast.Node) bool {
 		as, ok := n.(*ast.AssignStmt)
@@ -195,14 +197,6 @@ func (a *ctxAnalyzer) collectTimeoutContexts(pass *analysis.Pass, fd *ast.FuncDe
 			return true
 		}
 		if len(as.Lhs) == 0 || len(as.Rhs) == 0 {
-			return true
-		}
-		call, ok := as.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-
-		if !a.doesCreateTimeoutContext(call) {
 			return true
 		}
 
@@ -215,10 +209,20 @@ func (a *ctxAnalyzer) collectTimeoutContexts(pass *analysis.Pass, fd *ast.FuncDe
 			return true
 		}
 
-		contexts = append(contexts, timeoutContext{
-			obj: obj,
-			pos: as.Pos(),
-		})
+		call, ok := as.Rhs[0].(*ast.CallExpr)
+		if ok && a.doesCreateTimeoutContext(call) {
+			// This is a timeout context creation
+			ctx := timeoutContext{
+				obj: obj,
+				pos: as.Pos(),
+			}
+			contexts = append(contexts, ctx)
+			contextMap[obj] = &contexts[len(contexts)-1]
+		} else if existingCtx, exists := contextMap[obj]; exists {
+			// This is an overwrite of an existing timeout context with non-timeout
+			existingCtx.invalidPos = as.Pos()
+		}
+
 		return true
 	})
 	return contexts
@@ -297,6 +301,15 @@ func (a *ctxAnalyzer) checkContextViolation(pass *analysis.Pass, id *ast.Ident, 
 
 				// Context created before parallel call, but used/assigned after parallel call
 				if contextPos < parallelPos && nodePos > parallelPos {
+					// If context was invalidated (overwritten with non-timeout), check if that happened before this usage
+					if ctx.invalidPos != 0 {
+						invalidOffset := pass.Fset.Position(ctx.invalidPos).Offset
+						if invalidOffset < nodePos {
+							// Context was invalidated before this usage, so don't warn
+							return false
+						}
+					}
+
 					if isAssignment {
 						pass.Reportf(node.Pos(), "timeout context %s overwritten after a t.Parallel call; did you mean to shadow the variable?", id.Name)
 					} else {
