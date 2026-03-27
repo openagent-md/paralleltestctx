@@ -3,7 +3,7 @@ package plugin
 import (
 	"fmt"
 
-	"github.com/coder/paralleltestctx/pkg/paralleltestctx"
+	"github.com/openagent-md/paralleltestctx/pkg/paralleltestctx"
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 )

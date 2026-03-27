@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/coder/paralleltestctx/pkg/paralleltestctx"
+	"github.com/openagent-md/paralleltestctx/pkg/paralleltestctx"
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 

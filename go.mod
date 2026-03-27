@@ -1,4 +1,4 @@
-module github.com/coder/paralleltestctx
+module github.com/openagent-md/paralleltestctx
 
 go 1.24.6
 
